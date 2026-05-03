@@ -5,7 +5,7 @@ from telebot import types
 # --- НАСТРОЙКИ ---
 TOKEN = "8178663250:AAHgXKeZeSoy9d3z5ApD8Dk_JbnOW9MLbXM"
 TARGET_CHAT_USERNAME = "chatkaratels" # Юзернейм без @
-MY_ID = 7950038145 # Твой цифровой ID
+MY_ID = 7950038145 # Твой цифровой ID (обязательно укажи свой!)
 
 # ID подарков
 GIFT_PAINTER_ID = 6026193266406327981  # 50 звезд
@@ -28,7 +28,7 @@ def send_payment(message):
             prices=[types.LabeledPrice(label="Звезды", amount=100)]
         )
 
-# 2. ПОДТВЕРЖДЕНИЕ ПЛАТЕЖА (Чтобы не было ошибки FORM_SUBMIT_DUPLICATE)
+# 2. ПОДТВЕРЖДЕНИЕ ПЛАТЕЖА (Служебное)
 @bot.pre_checkout_query_handler(func=lambda query: True)
 def checkout_process(pre_checkout_query):
     bot.answer_pre_checkout_query(pre_checkout_query.id, ok=True)
@@ -37,11 +37,44 @@ def checkout_process(pre_checkout_query):
 def pay_ok(message):
     bot.send_message(message.chat.id, "✅ Звезды зачислены!")
 
-# 3. ОСНОВНАЯ ЛОГИКА В ЧАТЕ
-@bot.message_handler(func=lambda m: m.chat.username == TARGET_CHAT_USERNAME)
-def chat_logic(message):
-    if message.from_user.is_bot: return
+# 3. КОМАНДА ЕЖЕДНЕВНОГО КОНКУРСА (Пиши в чате /daily или /конкурс)
+@bot.message_handler(commands=['daily', 'конкурс'], func=lambda m: m.chat.username == TARGET_CHAT_USERNAME)
+def start_daily_contest(message):
+    # Проверяем, что команду запустил именно ты
+    if message.from_user.id != MY_ID:
+        return
+    
+    text = (
+        "🎉 **Ежедневный розыгрыш начинается!**\n\n"
+        "Сегодня я разыграю бонусные подарки самым активным участникам. "
+        "Просто общайтесь в чате, и шанс на победу увеличится!\n"
+        "Кто залутает первого мишку? Погнали! 🚀"
+    )
+    # Удаляем твое сообщение с командой, чтобы было красиво
+    bot.delete_message(message.chat.id, message.message_id)
+    bot.send_message(message.chat.id, text, parse_mode="Markdown")
 
+# 4. ОСНОВНАЯ ЛОГИКА В ЧАТЕ (Автоответ на посты + Рулетка)
+# Добавили content_types, чтобы бот реагировал и на посты с фото/видео
+@bot.message_handler(content_types=['text', 'photo', 'video', 'document', 'animation'], func=lambda m: m.chat.username == TARGET_CHAT_USERNAME)
+def chat_logic(message):
+    
+    # --- АВТООТВЕТ НА ПОСТЫ ИЗ КАНАЛА ---
+    if getattr(message, 'is_automatic_forward', False):
+        welcome_text = (
+            "приветствую всех! \n\n"
+            "тут ты можешь общаться в комментариях и чате и получить мишку от @psychokaratel ✌️\n\n"
+            "просто общайся в чате и получай возможность залутать мишку 🧸\n\n"
+            "⭐️ купить звезды дешево любым способом оплаты 👉 @mirrorstarsbot"
+        )
+        bot.reply_to(message, welcome_text)
+        return # Выходим, чтобы канал сам себе подарки не выигрывал
+
+    # Игнорируем обычных ботов
+    if message.from_user.is_bot or not message.text: 
+        return
+
+    # --- РУЛЕТКА ПОДАРКОВ ---
     roll = random.uniform(0, 100)
     gift_id = None
     prize_name = ""
@@ -72,5 +105,5 @@ def chat_logic(message):
             print(f"Ошибка выдачи: {e}")
 
 if __name__ == "__main__":
-    print("Бот запущен. Напиши ему /pay в личку для пополнения.")
+    print("Бот запущен. Мониторю посты и чат...")
     bot.infinity_polling()
